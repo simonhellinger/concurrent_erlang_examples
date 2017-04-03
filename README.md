@@ -1,2 +1,4 @@
 # concurrent_erlang_examples
-Contains examples from the future learn mooc in April 2017
+Examples for the Future Learn Concurrent Erlang Mooc from April 2017
+
+
