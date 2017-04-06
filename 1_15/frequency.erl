@@ -18,17 +18,24 @@
 %%
 %%    frequency:start(3500).
 %%
+%% With a client receive timeout of a fixed 500ms, a few calls
+%% will time out before the first response comes back.
+%%
 %% Running frequency:allocate() a few times in quick succession
 %% will not produce any replies from the server until it's
 %% too late. When the 3500ms have passed, call frequency:allocate()
 %% again and you'll see the clear function throw out
 %% a series of allocation replies.
-
-%% FIXME: Is there a better place for clear/0 ???
+%%
+%% I run clear_verbose/0 as first statement in each
+%% API call, thus missed responses will remain in the mailbox until
+%% the next API call. Short of actually creating a timed recursive
+%% function that cleans messages out periodically in the true sense
+%% of the word, I think that's a good trade-off.
 
 -module(frequency).
--export([start/0,start/1,allocate/0,deallocate/1,stop/0]).
--export([init/0,init/1]).
+-export([start/0,start/1,allocate/0,deallocate/1,stop/0]). % API calls
+-export([init/0,init/1]). % needed by API call 'start'
 
 %% These are the start functions used to create and
 %% initialize the server.
@@ -39,22 +46,22 @@ start() ->
     register(frequency,
 	     spawn(frequency, init, [])).
 
+init() ->
+  init(0).
+
 % starts a slow server that delays every reply by DelayInMs
 
 start(DelayInMs) ->
     register(frequency,
 	     spawn(frequency, init, [DelayInMs])).
 
-init() ->
-  init(0).
-
 init(DelayInMs) ->
   Frequencies = {get_frequencies(), []},
   loop(Frequencies, DelayInMs).
 
 % Hard Coded
-get_frequencies() -> [10,11,12,13,14,15].
 
+get_frequencies() -> [10,11,12,13,14,15].
 get_receive_timeout_ms() -> 500.
 
 %% The Main Loop
@@ -127,13 +134,13 @@ deallocate({Free, Allocated}, Freq) ->
 %% The clear function removes all 
 %% messages from the mailbox and then exits.
 
-clear() ->
-	receive
-		_Msg ->
-			clear()
-		after 0 ->
-			ok
-	end.
+%clear() ->
+%	receive
+%		_Msg ->
+% 		clear()
+%		after 0 ->
+%			ok
+%	end.
 
 %% The verbose clear function prints and removes all 
 %% messages from the mailbox and then exits.
