@@ -1,28 +1,45 @@
 -module(client).
--export([start/0]).
+-export([start/1, kill/1]).
 -export([init/0]).
 
-start() ->
-    register(client,
+start(Clientname) ->
+    register(Clientname,
         spawn(client, init, [])).
         
 init() ->
+    % prevent getting killed when frequency server dies 
+    % (clients are linked by frequency server).
+    process_flag(trap_exit, true),
     loop().
 
 loop() ->
-    allocateDeallocateFrequency(),
+    case whereis(frequency) of
+        undefined ->
+            io:format("Server unavailable, sleeping~n"),
+            timer:sleep(5000);
+        _ ->
+            io:format("Server available, doing stuff~n"),
+            timer:sleep(5000)
+    end,
     loop().
 
-allocateDeallocateFrequency() ->
+allocate() ->
     frequency ! {request, self(), allocate},
     receive
-        {ok, Freq} ->
-            deallocateFrequency(Freq)
+        {reply, {ok, Freq}} ->
+            Freq;
+        {'EXIT', _Pid, _Reason} ->
+            io:format("uh oh~n")
     end.
 
-deallocateFrequency(Freq) ->
+deallocate(Freq) ->
     frequency ! {request, self(), {deallocate, Freq}},
     receive
-        {reply, Reply} ->
-            Reply
+        {reply, _Reply} ->
+            ok;
+        {'EXIT', _Pid, _Reason} ->
+            io:format("uh oh~n")
     end.
+
+kill(ProcessId) ->
+    exit(whereis(ProcessId), kill).
