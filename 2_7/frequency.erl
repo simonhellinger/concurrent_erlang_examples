@@ -31,10 +31,12 @@ loop(Frequencies) ->
   receive
     {request, Pid, allocate} ->
       {NewFrequencies, Reply} = allocate(Frequencies, Pid),
+      timer:sleep(1500),
       Pid ! {reply, Reply},
       loop(NewFrequencies);
     {request, Pid , {deallocate, Freq}} ->
       NewFrequencies = deallocate(Frequencies, Freq),
+      timer:sleep(1500),
       Pid ! {reply, ok},
       loop(NewFrequencies);
     {request, Pid, stop} ->
