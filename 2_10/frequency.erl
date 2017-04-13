@@ -25,23 +25,29 @@ init() ->
 % Hard Coded
 get_frequencies() -> [10,11,12,13,14,15].
 
+get_supervisor_freq() -> whereis(freqsuper).
+
 %% The Main Loop
 
 loop(Frequencies) ->
+  SupervisorPid = get_supervisor_freq(),
   receive
     {request, Pid, allocate} ->
       {NewFrequencies, Reply} = allocate(Frequencies, Pid),
-      Pid ! {reply, Reply},
-      loop(NewFrequencies);
-    {request, Pid , {deallocate, Freq}} ->
-      NewFrequencies = deallocate(Frequencies, Freq),
-      Pid ! {reply, ok},
-      loop(NewFrequencies);
-    {request, Pid, stop} ->
-      Pid ! {reply, stopped};
-    {'EXIT', Pid, _Reason} ->                   %%% CLAUSE ADDED
-      NewFrequencies = exited(Frequencies, Pid), 
-      loop(NewFrequencies)
+        Pid ! {reply, Reply},
+        loop(NewFrequencies);
+      {request, Pid , {deallocate, Freq}} ->
+        NewFrequencies = deallocate(Frequencies, Freq),
+        Pid ! {reply, ok},
+        loop(NewFrequencies);
+      {request, Pid, stop} ->
+        Pid ! {reply, stopped};
+      {'EXIT', SupervisorPid, _Reason} ->
+        io:format("Supervisor shut down. Shutting myself down.~n"),
+        exit(self(), kill); % so that linked elements get the kill reason
+      {'EXIT', Pid, _Reason} ->                   %%% CLAUSE ADDED
+        NewFrequencies = exited(Frequencies, Pid), 
+        loop(NewFrequencies)
   end.
 
 %% Functional interface
