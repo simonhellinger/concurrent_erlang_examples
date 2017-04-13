@@ -7,68 +7,39 @@
 %%   (c) Francesco Cesarini and Simon Thompson
 
 -module(frequency).
--export([start/0,allocate/0,deallocate/1,stop/0]).
--export([init/0]).
+-export([init/1]).
 
-%% These are the start functions used to create and
-%% initialize the server.
 
-start() ->
-    register(frequency,
-	     spawn(frequency, init, [])).
-
-init() ->
+init(SupervisorPid) ->
   process_flag(trap_exit, true),    %%% ADDED
   Frequencies = {get_frequencies(), []},
-  loop(Frequencies).
+  loop(SupervisorPid, Frequencies).
 
 % Hard Coded
 get_frequencies() -> [10,11,12,13,14,15].
 
-get_supervisor_freq() -> whereis(freqsuper).
-
 %% The Main Loop
 
-loop(Frequencies) ->
-  SupervisorPid = get_supervisor_freq(),
+loop(SupervisorPid, Frequencies) ->
   receive
     {request, Pid, allocate} ->
       {NewFrequencies, Reply} = allocate(Frequencies, Pid),
         Pid ! {reply, Reply},
-        loop(NewFrequencies);
+        loop(SupervisorPid, NewFrequencies);
       {request, Pid , {deallocate, Freq}} ->
         NewFrequencies = deallocate(Frequencies, Freq),
         Pid ! {reply, ok},
-        loop(NewFrequencies);
+        loop(SupervisorPid, NewFrequencies);
       {request, Pid, stop} ->
         Pid ! {reply, stopped};
       {'EXIT', SupervisorPid, _Reason} ->
-        io:format("Supervisor shut down. Shutting myself down.~n"),
-        exit(self(), kill); % so that linked elements get the kill reason
+        io:format("Supervisor ~w died, going down~n", [SupervisorPid]),
+        exit(self(), kill);
       {'EXIT', Pid, _Reason} ->                   %%% CLAUSE ADDED
+        io:format("Client ~w died, ignoring~n", [Pid]),
         NewFrequencies = exited(Frequencies, Pid), 
-        loop(NewFrequencies)
+        loop(SupervisorPid, NewFrequencies)
   end.
-
-%% Functional interface
-
-allocate() -> 
-    frequency ! {request, self(), allocate},
-    receive 
-	    {reply, Reply} -> Reply
-    end.
-
-deallocate(Freq) -> 
-    frequency ! {request, self(), {deallocate, Freq}},
-    receive 
-	    {reply, Reply} -> Reply
-    end.
-
-stop() -> 
-    frequency ! {request, self(), stop},
-    receive 
-	    {reply, Reply} -> Reply
-    end.
 
 
 %% The Internal Help Functions used to allocate and

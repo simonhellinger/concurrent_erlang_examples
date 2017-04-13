@@ -1,37 +1,40 @@
 -module(freqsuper).
--export([start/0, stop/0, startfs/0, stopfs/1]).
+-export([start/0, stop/0, startfs/0, killfs/1, stopfs/1]).
 -export([init/0]).
 
 init() ->
     process_flag(trap_exit, true), % trap exits of all our frequency servers
-    loop([]).
+    loop().
 
-loop(FreqServers) ->
+loop() ->
     receive
         {request, Pid, startfs} ->
-            FsPid = spawn_link(frequency, init, []),
+            FsPid = create_new_frequency_server(),
             Pid ! {reply, FsPid},
-            loop([FsPid|FreqServers]);
-        {request, Pid, {stopfs, FsPid}} ->
-            FsPid ! {request, Pid, stop},
-            loop(removePidFromList(Pid, FreqServers));
+            loop();
+        {request, Pid, {killfs, FsPid}} ->
+            kill_frequency_server(FsPid),
+            Pid ! {reply, force_stopped},
+            loop();
+        {request, Pid, {stop, FsPid}} ->
+            Reply = stop_frequency_server(FsPid),
+            Pid ! Reply,
+            loop();
         {request, Pid, stop} ->
-            Pid ! {reply, ok};
-        {'EXIT', Pid, normal} ->
-            loop(removePidFromList(Pid, FreqServers));
-        {'EXIT', Pid, shutdown} ->
-            loop(removePidFromList(Pid, FreqServers));
+            Pid ! {reply, stopped};
         {'EXIT', Pid, _Reason} ->
-            FsPid = spawn_link(frequency, init, []),
+            io:format("Frequency Server ~w died, restarting~n", [Pid]),
+            FsPid = create_new_frequency_server(),
             Pid ! {reply, FsPid},
-            loop([FsPid|FreqServers])
+            loop()
     end.
 
 
-%%% Public API
+%%% Public API. All public api except start sends a message to the message-loop and gets a message in return 
 
 start() ->
-    register(freqsuper, spawn(freqsuper, init, [])).
+    register(freqsuper,
+        spawn(freqsuper, init, [])).
 
 stop() ->
     freqsuper ! {request, self(), stop},
@@ -48,22 +51,31 @@ startfs() ->
     end.
     
 stopfs(Pid) ->
-    freqsuper ! {request, self(), {stopfs, Pid}},
+    freqsuper ! {request, self(), {killfs, Pid}},
     receive
         Msg ->
             Msg
     end.
 
-%%% Internal helper function
+killfs(Pid) ->
+    freqsuper ! {request, self(), {killfs, Pid}},
+    receive
+        Msg ->
+            Msg
+    end.
 
-% Manage the list of living FrequencyServers
+%%% Frequency Server handling
+create_new_frequency_server() ->
+    spawn_link(frequency, init, [self()]).
 
-removePidFromList(Pid, Pids) ->
-    removePidFromList(Pid, Pids, []).
+kill_frequency_server(FsPid) ->
+    exit(FsPid, kill).
 
-removePidFromList(_Pid, [], Result) ->
-    Result;
-removePidFromList(Pid, [Pid|Pids], Result) ->
-    removePidFromList(Pid, Pids, Result);
-removePidFromList(Pid, [OtherPid|Pids], Result) ->
-    removePidFromList(Pid, Pids, [OtherPid|Result]).
+stop_frequency_server(FsPid) ->
+    FsPid ! {request, self(), stop},
+    receive
+        {reply, Reply} ->
+            Reply
+    end.
+
+    
