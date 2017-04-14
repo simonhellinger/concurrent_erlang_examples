@@ -6,12 +6,18 @@
 %%   http://www.erlangprogramming.org/
 %%   (c) Francesco Cesarini and Simon Thompson
 
+
+%% This is the provided frequency server with minor changes.
+%% 1) The functional API is removed. All interaction is driven by
+%%    the supervisor.
+%% 2) The function start/0 is gone for the same reason
+%% 3) I added a signal trap specifically for supervisor exits.
+
 -module(frequency).
 -export([init/1]).
 
-
 init(SupervisorPid) ->
-  process_flag(trap_exit, true),    %%% ADDED
+  process_flag(trap_exit, true),
   Frequencies = {get_frequencies(), []},
   loop(SupervisorPid, Frequencies).
 
@@ -32,11 +38,11 @@ loop(SupervisorPid, Frequencies) ->
         loop(SupervisorPid, NewFrequencies);
       {request, Pid, stop} ->
         Pid ! {reply, stopped};
-      {'EXIT', SupervisorPid, _Reason} ->
+      {'EXIT', SupervisorPid, _Reason} ->                               %% ADDED
         io:format("Supervisor ~w died, going down~n", [SupervisorPid]),
         exit(self(), kill);
-      {'EXIT', Pid, _Reason} ->                   %%% CLAUSE ADDED
-        io:format("Client ~w died, ignoring~n", [Pid]),
+      {'EXIT', Pid, _Reason} ->
+        io:format("Client ~w died, ignoring~n", [Pid]),                 %% ADDED MESSAGE
         NewFrequencies = exited(Frequencies, Pid), 
         loop(SupervisorPid, NewFrequencies)
   end.
@@ -48,16 +54,16 @@ loop(SupervisorPid, Frequencies) ->
 allocate({[], Allocated}, _Pid) ->
   {{[], Allocated}, {error, no_frequency}};
 allocate({[Freq|Free], Allocated}, Pid) ->
-  link(Pid),                                               %%% ADDED
+  link(Pid),
   {{Free, [{Freq, Pid}|Allocated]}, {ok, Freq}}.
 
 deallocate({Free, Allocated}, Freq) ->
-  {value,{Freq,Pid}} = lists:keysearch(Freq,1,Allocated),  %%% ADDED
-  unlink(Pid),                                             %%% ADDED
+  {value,{Freq,Pid}} = lists:keysearch(Freq,1,Allocated),
+  unlink(Pid),
   NewAllocated=lists:keydelete(Freq, 1, Allocated),
   {[Freq|Free],  NewAllocated}.
 
-exited({Free, Allocated}, Pid) ->                %%% FUNCTION ADDED
+exited({Free, Allocated}, Pid) ->
     case lists:keysearch(Pid,2,Allocated) of
       {value,{Freq,Pid}} ->
         NewAllocated = lists:keydelete(Freq,1,Allocated),
