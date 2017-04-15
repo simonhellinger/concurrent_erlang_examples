@@ -8,7 +8,7 @@
 
 -module(frequency).
 -export([start/0,allocate/0,deallocate/1,stop/0]).
--export([init/0]).
+-export([init/0, loop/1]).
 
 %% These are the start functions used to create and
 %% initialize the server.
@@ -19,7 +19,7 @@ start() ->
 
 init() ->
   Frequencies = {get_frequencies(), []},
-  loop(Frequencies).
+  frequency:loop(Frequencies).
 
 % Hard Coded
 get_frequencies() -> [10,11,12,13,14,15].
@@ -31,11 +31,11 @@ loop(Frequencies) ->
     {request, Pid, allocate} ->
       {NewFrequencies, Reply} = allocate(Frequencies, Pid),
       Pid ! {reply, Reply},
-      loop(NewFrequencies);
+      frequency:loop(NewFrequencies);
     {request, Pid , {deallocate, Freq}} ->
       NewFrequencies = deallocate(Frequencies, Freq),
       Pid ! {reply, ok},
-      loop(NewFrequencies);
+      frequency:loop(NewFrequencies);
     {request, Pid, stop} ->
       Pid ! {reply, stopped}
   end.
