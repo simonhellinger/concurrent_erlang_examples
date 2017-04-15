@@ -7,7 +7,7 @@
 %%   (c) Francesco Cesarini and Simon Thompson
 
 -module(frequency).
--export([start/0,allocate/0,deallocate/1,stop/0]).
+-export([start/0,allocate/0,deallocate/1,inject/1,stop/0]).
 -export([init/0, loop/1]).
 
 %% These are the start functions used to create and
@@ -32,10 +32,14 @@ loop(Frequencies) ->
       {NewFrequencies, Reply} = allocate(Frequencies, Pid),
       Pid ! {reply, Reply},
       frequency:loop(NewFrequencies);
-    {request, Pid , {deallocate, Freq}} ->
+    {request, Pid, {deallocate, Freq}} ->
       NewFrequencies = deallocate(Frequencies, Freq),
       Pid ! {reply, ok},
       frequency:loop(NewFrequencies);
+    {request, Pid, {inject, Freqs}} ->
+      NewFrequencies = inject(Frequencies, Freqs),
+      Pid ! {reply, ok},
+      frequency:loop(NewFrequencies);  
     {request, Pid, stop} ->
       Pid ! {reply, stopped}
   end.
@@ -52,6 +56,12 @@ deallocate(Freq) ->
     frequency ! {request, self(), {deallocate, Freq}},
     receive 
 	    {reply, Reply} -> Reply
+    end.
+
+inject(Freqs) ->
+    frequency ! {request, self(), {inject, Freqs}},
+    receive
+      {reply, Reply} -> Reply
     end.
 
 stop() -> 
@@ -72,3 +82,8 @@ allocate({[Freq|Free], Allocated}, Pid) ->
 deallocate({Free, Allocated}, Freq) ->
   NewAllocated=lists:keydelete(Freq, 1, Allocated),
   {[Freq|Free],  NewAllocated}.
+
+inject(Frequencies, []) ->
+  Frequencies;
+inject({Free, Allocated}, [Freq|NewFreqs]) ->
+  inject({[Freq|Free], Allocated}, NewFreqs).
